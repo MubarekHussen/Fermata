@@ -119,9 +119,25 @@ const Index = () => {
         setVoiceFrom(locations.from);
         setVoiceTo(locations.to);
         
-        const responseText = `የመነሻ ቦታ ${locations.from} እና መድረሻ ቦታ ${locations.to} ተሞልቷል። እባክዎን "Find Pickup Point" ቁልፍን ይንኩ።`;
-        setAmharicResponse(responseText);
-        await speakText(responseText);
+        // Try to get route information from API
+        try {
+          const results = await performRouteSearch(locations.from, locations.to);
+          if (results.length > 0) {
+            const bestResult = results[0];
+            const responseText = `የመነሻ ቦታ ${locations.from} እና መድረሻ ቦታ ${locations.to} ተሞልቷል። የጉዞ ዋጋ ${bestResult.price} ${bestResult.fare?.currency || 'Birr'} ነው። እባክዎን "Find Pickup Point" ቁልፍን ይንኩ።`;
+            setAmharicResponse(responseText);
+            await speakText(responseText);
+          } else {
+            const responseText = `የመነሻ ቦታ ${locations.from} እና መድረሻ ቦታ ${locations.to} ተሞልቷል። እባክዎን "Find Pickup Point" ቁልፍን ይንኩ።`;
+            setAmharicResponse(responseText);
+            await speakText(responseText);
+          }
+        } catch (error) {
+          const responseText = `የመነሻ ቦታ ${locations.from} እና መድረሻ ቦታ ${locations.to} ተሞልቷል። እባክዎን "Find Pickup Point" ቁልፍን ይንኩ።`;
+          setAmharicResponse(responseText);
+          await speakText(responseText);
+        }
+        
         setIsProcessing(false);
         return;
       } else if (locations.from) {
@@ -177,6 +193,8 @@ const Index = () => {
       'gashen': 'gashen',
       'ለደታ': 'ledata',
       'ledata': 'ledata',
+      'አየርቴና': 'ayertena',
+      'ayertena': 'ayertena',
     };
 
     let from = '';
@@ -217,11 +235,48 @@ const Index = () => {
   };
 
   // Function to search for routes based on locations
-  const performRouteSearch = (from: string, to: string) => {
+  const performRouteSearch = async (from: string, to: string) => {
+    try {
+      // Try to use the real API first
+      const apiResponse = await fetch('http://localhost:8000/api/route/plan', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({
+          origin: from.trim(),
+          destination: to.trim(),
+          include_instructions: false,
+        }),
+      });
+
+      if (apiResponse.ok) {
+        const data = await apiResponse.json();
+        const searchResult = {
+          route: `${data.origin?.name || from} to ${data.destination?.name || to}`,
+          pickup: data.origin?.name || from,
+          landmark: data.destination?.name || to,
+          walkingTime: `${Math.round(data.route.time / 60)} min`,
+          coordinates: {
+            lat: data.origin?.lat || 0,
+            lng: data.origin?.lng || 0,
+          },
+          price: data.fare.total_fare,
+          fare: data.fare,
+          origin: data.origin,
+          destination: data.destination,
+        };
+        return [searchResult];
+      }
+    } catch (error) {
+      console.error('API call failed, falling back to mock data:', error);
+    }
+
+    // Fallback to mock data
     const fromLower = from.toLowerCase().trim();
     const toLower = to.toLowerCase().trim();
 
-    // Find routes that match the exact from->to pattern
     const exactMatches = routeData.filter((result) => {
       const routeLower = result.route.toLowerCase();
       const hasFrom = routeLower.includes(fromLower);
@@ -229,7 +284,6 @@ const Index = () => {
       return hasFrom && hasTo;
     });
 
-    // If no exact matches, try partial matches
     const partialMatches = routeData.filter((result) => {
       const routeLower = result.route.toLowerCase();
       const pickupLower = result.pickup.toLowerCase();
@@ -242,7 +296,6 @@ const Index = () => {
 
     const matchingRoutes = exactMatches.length > 0 ? exactMatches : partialMatches;
 
-    // Convert to SearchResult format
     return matchingRoutes.map((route) => ({
       route: route.route,
       pickup: route.pickup,

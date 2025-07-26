@@ -2,11 +2,12 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { MapPin, Navigation, Clock, Map, DollarSign, Mic } from "lucide-react";
+import { MapPin, Navigation, Clock, Map, DollarSign, Mic, AlertCircle } from "lucide-react";
 import { routeData, RouteData } from "@/data/routes";
 import WalkingDirections from "./WalkingDirections";
 import VoiceInput from "./VoiceInput";
 import React from "react";
+import apiService, { SearchResult as ApiSearchResult, FareInfo, LocationInfo } from "@/services/api";
 
 interface SearchResult {
   route: string;
@@ -15,6 +16,9 @@ interface SearchResult {
   walkingTime: string;
   coordinates: { lat: number; lng: number };
   price: number; // Price in Ethiopian Birr
+  fare?: FareInfo;
+  origin?: LocationInfo;
+  destination?: LocationInfo;
 }
 
 interface SearchSectionProps {
@@ -33,6 +37,7 @@ export default function SearchSection({ onSearchResults, initialFrom = "", initi
   const [isListeningFrom, setIsListeningFrom] = useState(false);
   const [isListeningTo, setIsListeningTo] = useState(false);
   const [showVoiceInput, setShowVoiceInput] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Update state when props change
   React.useEffect(() => {
@@ -55,89 +60,28 @@ export default function SearchSection({ onSearchResults, initialFrom = "", initi
     if (!from || !to) return;
 
     setIsSearching(true);
-    // Simulate API call
-    setTimeout(() => {
-      // Real search logic - find exact route matches
-      const fromLower = from.toLowerCase().trim();
-      const toLower = to.toLowerCase().trim();
+    setError(null);
 
-      // Find routes that match the exact from->to pattern
-      const exactMatches = routeData.filter((result) => {
-        const routeLower = result.route.toLowerCase();
-
-        // Check if the route contains both "from" and "to" locations
-        const hasFrom = routeLower.includes(fromLower);
-        const hasTo = routeLower.includes(toLower);
-
-        // For exact matches, both locations should be in the route
-        return hasFrom && hasTo;
+    try {
+      // Always use real API
+      const apiResponse = await apiService.planRoute({
+        origin: from.trim(),
+        destination: to.trim(),
+        include_instructions: false,
       });
 
-      // If no exact matches, try partial matches with better logic
-      const partialMatches = routeData.filter((result) => {
-        const routeLower = result.route.toLowerCase();
-        const pickupLower = result.pickup.toLowerCase();
+      const searchResult = apiService.convertToSearchResult(apiResponse);
+      const finalResults = [searchResult];
 
-        // Check if either location matches the route or pickup point
-        const fromMatches =
-          routeLower.includes(fromLower) || pickupLower.includes(fromLower);
-        const toMatches =
-          routeLower.includes(toLower) || pickupLower.includes(toLower);
-
-        // Also check for location name variations
-        const fromVariations =
-          fromLower.includes("ledata") ||
-          fromLower.includes("lafto") ||
-          fromLower.includes("bole") ||
-          fromLower.includes("mexico") ||
-          fromLower.includes("piassa") ||
-          fromLower.includes("merkato");
-        const toVariations =
-          toLower.includes("ledata") ||
-          toLower.includes("lafto") ||
-          toLower.includes("bole") ||
-          toLower.includes("mexico") ||
-          toLower.includes("piassa") ||
-          toLower.includes("merkato");
-
-        return fromMatches || toMatches || (fromVariations && toVariations);
-      });
-
-      // Use exact matches if available, otherwise use partial matches
-      const matchingRoutes =
-        exactMatches.length > 0 ? exactMatches : partialMatches;
-
-      // Convert RouteData to SearchResult format
-      const searchResults: SearchResult[] = matchingRoutes.map((route) => ({
-        route: route.route,
-        pickup: route.pickup,
-        landmark: route.landmark,
-        walkingTime: route.walkingTime,
-        coordinates: route.coordinates,
-        price: route.price,
-      }));
-
-      // If still no matches, show popular routes as suggestions
-      const finalResults =
-        searchResults.length > 0
-          ? searchResults
-          : routeData
-              .filter((route) => route.isPopular)
-              .slice(0, 3)
-              .map((route) => ({
-                route: route.route,
-                pickup: route.pickup,
-                landmark: route.landmark,
-                walkingTime: route.walkingTime,
-                coordinates: route.coordinates,
-                price: route.price,
-              }));
-
-      console.log("Search results:", finalResults); // Debug log
       setResults(finalResults);
       onSearchResults(finalResults);
+    } catch (error) {
+      console.error('Search error:', error);
+      setError('Failed to find route. Please check your locations and try again.');
+      // Optionally, fallback to mock data here if you want
+    } finally {
       setIsSearching(false);
-    }, 1000);
+    }
   };
 
   return (
@@ -217,13 +161,20 @@ export default function SearchSection({ onSearchResults, initialFrom = "", initi
           </Button>
 
           {/* Available Locations Help */}
+          {/* Error Display */}
+          {error && (
+            <div className="flex items-center space-x-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <AlertCircle className="w-4 h-4 text-red-500" />
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          )}
+
           <div className="text-center space-y-2">
             <p className="text-sm text-muted-foreground mb-2">
-              Available locations: Ledata, Lafto, Bole, Mexico, Piassa, Merkato
+              Available locations: Ledata, Lafto, Bole, Mexico, Piassa, Merkato, Ayertena
             </p>
             <p className="text-xs text-muted-foreground">
-              Try searching for routes like "Ledata to Mexico" or "Lafto to
-              Piassa"
+              Try searching for routes like "Bole to Ayertena" or "Lafto to Mexico"
             </p>
             <div className="flex items-center justify-center space-x-2 text-xs text-muted-foreground">
               <Mic className="w-3 h-3" />
@@ -269,10 +220,31 @@ export default function SearchSection({ onSearchResults, initialFrom = "", initi
                     </div>
                     <div className="flex items-center text-lg font-bold text-green-600 bg-green-50 px-3 py-1 rounded-full">
                       <DollarSign className="w-4 h-4 mr-1" />
-                      {result.price} Birr
+                      {result.price} {result.fare?.currency || 'Birr'}
                     </div>
                   </div>
                 </div>
+
+                {/* API-specific details */}
+                {result.fare && (
+                  <div className="bg-blue-50 p-3 rounded-lg space-y-2">
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">Distance:</span>
+                        <span className="ml-1 font-medium">{result.fare.breakdown.distance_km.toFixed(1)} km</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Time:</span>
+                        <span className="ml-1 font-medium">{result.fare.breakdown.time_minutes.toFixed(0)} min</span>
+                      </div>
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      Base: {result.fare.breakdown.base_fare} | 
+                      Distance: {result.fare.breakdown.distance_fare.toFixed(0)} | 
+                      Time: {result.fare.breakdown.time_fare.toFixed(0)}
+                    </div>
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <div className="flex items-start space-x-2">
