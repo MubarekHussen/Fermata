@@ -13,6 +13,15 @@ interface MapComponentProps {
     walkingTime: string;
     coordinates: { lat: number; lng: number };
     price: number; // Price in Ethiopian Birr
+    apiResponse?: {
+      route: {
+        coordinates: [number, number][];
+        distance: number;
+        time: number;
+      };
+      origin: { lat: number; lng: number; name: string };
+      destination: { lat: number; lng: number; name: string };
+    };
   };
 }
 
@@ -178,8 +187,8 @@ const MapComponent: React.FC<MapComponentProps> = ({ searchResult }) => {
   const highlightRoute = () => {
     if (!map.current || !searchResult) return;
 
-    // Add pickup point marker
-    const pickupMarker = new mapboxgl.Marker({
+    // Add origin marker
+    const originMarker = new mapboxgl.Marker({
       color: "#00B894",
       scale: 1.2,
     })
@@ -196,12 +205,70 @@ const MapComponent: React.FC<MapComponentProps> = ({ searchResult }) => {
       )
       .addTo(map.current);
 
-    // Fly to the pickup point
-    map.current.flyTo({
-      center: [searchResult.coordinates.lng, searchResult.coordinates.lat],
-      zoom: 15,
-      essential: true,
-    });
+    // Add destination marker if we have API response
+    if (searchResult.apiResponse) {
+      const destMarker = new mapboxgl.Marker({
+        color: "#FF6B6B",
+        scale: 1.2,
+      })
+        .setLngLat([searchResult.apiResponse.destination.lng, searchResult.apiResponse.destination.lat])
+        .setPopup(
+          new mapboxgl.Popup().setHTML(`
+            <div class="p-3">
+              <h3 class="font-bold text-lg text-gray-800">${searchResult.apiResponse.destination.name}</h3>
+              <p class="text-sm text-gray-600">Destination</p>
+            </div>
+          `)
+        )
+        .addTo(map.current);
+
+      // Add route line if we have coordinates
+      if (searchResult.apiResponse.route.coordinates.length > 0) {
+        map.current.addSource('route', {
+          type: 'geojson',
+          data: {
+            type: 'Feature',
+            properties: {},
+            geometry: {
+              type: 'LineString',
+              coordinates: searchResult.apiResponse.route.coordinates
+            }
+          }
+        });
+
+        map.current.addLayer({
+          id: 'route-line',
+          type: 'line',
+          source: 'route',
+          layout: {
+            'line-join': 'round',
+            'line-cap': 'round'
+          },
+          paint: {
+            'line-color': '#00B894',
+            'line-width': 4,
+            'line-opacity': 0.8
+          }
+        });
+      }
+
+      // Fly to show both origin and destination
+      const bounds = new mapboxgl.LngLatBounds();
+      bounds.extend([searchResult.coordinates.lng, searchResult.coordinates.lat]);
+      bounds.extend([searchResult.apiResponse.destination.lng, searchResult.apiResponse.destination.lat]);
+      
+      map.current.fitBounds(bounds, {
+        padding: 50,
+        essential: true
+      });
+    } else {
+      // Fallback to original behavior
+      map.current.flyTo({
+        center: [searchResult.coordinates.lng, searchResult.coordinates.lat],
+        zoom: 15,
+        essential: true,
+      });
+    }
   };
 
   const getUserLocation = () => {

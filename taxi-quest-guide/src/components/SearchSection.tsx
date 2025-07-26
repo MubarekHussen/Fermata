@@ -2,10 +2,11 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { MapPin, Navigation, Clock, Map, DollarSign, Mic } from "lucide-react";
-import { routeData, RouteData } from "@/data/routes";
+import { MapPin, Navigation, Clock, Map, DollarSign, Mic, AlertCircle } from "lucide-react";
+import { apiService, RoutePlanResponse } from "@/services/api";
 import WalkingDirections from "./WalkingDirections";
 import VoiceInput from "./VoiceInput";
+import { useToast } from "@/hooks/use-toast";
 
 interface SearchResult {
   route: string;
@@ -14,6 +15,7 @@ interface SearchResult {
   walkingTime: string;
   coordinates: { lat: number; lng: number };
   price: number; // Price in Ethiopian Birr
+  apiResponse?: RoutePlanResponse; // Store full API response
 }
 
 interface SearchSectionProps {
@@ -30,6 +32,8 @@ export default function SearchSection({ onSearchResults }: SearchSectionProps) {
   const [isListeningFrom, setIsListeningFrom] = useState(false);
   const [isListeningTo, setIsListeningTo] = useState(false);
   const [showVoiceInput, setShowVoiceInput] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
 
   const handleVoiceFrom = (transcript: string) => {
     setFrom(transcript);
@@ -43,89 +47,51 @@ export default function SearchSection({ onSearchResults }: SearchSectionProps) {
     if (!from || !to) return;
 
     setIsSearching(true);
-    // Simulate API call
-    setTimeout(() => {
-      // Real search logic - find exact route matches
-      const fromLower = from.toLowerCase().trim();
-      const toLower = to.toLowerCase().trim();
+    setError(null);
 
-      // Find routes that match the exact from->to pattern
-      const exactMatches = routeData.filter((result) => {
-        const routeLower = result.route.toLowerCase();
-
-        // Check if the route contains both "from" and "to" locations
-        const hasFrom = routeLower.includes(fromLower);
-        const hasTo = routeLower.includes(toLower);
-
-        // For exact matches, both locations should be in the route
-        return hasFrom && hasTo;
+    try {
+      // Call the real backend API
+      const apiResponse = await apiService.planRoute({
+        origin: from.trim(),
+        destination: to.trim(),
+        include_instructions: false
       });
 
-      // If no exact matches, try partial matches with better logic
-      const partialMatches = routeData.filter((result) => {
-        const routeLower = result.route.toLowerCase();
-        const pickupLower = result.pickup.toLowerCase();
+      // Convert API response to SearchResult format
+      const searchResult: SearchResult = {
+        route: `${apiResponse.origin.name} → ${apiResponse.destination.name}`,
+        pickup: `${apiResponse.origin.name} Station`,
+        landmark: `Route to ${apiResponse.destination.name}`,
+        walkingTime: `${Math.round(apiResponse.route.time / 60)} min`,
+        coordinates: {
+          lat: apiResponse.origin.lat,
+          lng: apiResponse.origin.lng
+        },
+        price: apiResponse.fare.total_fare,
+        apiResponse: apiResponse
+      };
 
-        // Check if either location matches the route or pickup point
-        const fromMatches =
-          routeLower.includes(fromLower) || pickupLower.includes(fromLower);
-        const toMatches =
-          routeLower.includes(toLower) || pickupLower.includes(toLower);
-
-        // Also check for location name variations
-        const fromVariations =
-          fromLower.includes("ledata") ||
-          fromLower.includes("lafto") ||
-          fromLower.includes("bole") ||
-          fromLower.includes("mexico") ||
-          fromLower.includes("piassa") ||
-          fromLower.includes("merkato");
-        const toVariations =
-          toLower.includes("ledata") ||
-          toLower.includes("lafto") ||
-          toLower.includes("bole") ||
-          toLower.includes("mexico") ||
-          toLower.includes("piassa") ||
-          toLower.includes("merkato");
-
-        return fromMatches || toMatches || (fromVariations && toVariations);
-      });
-
-      // Use exact matches if available, otherwise use partial matches
-      const matchingRoutes =
-        exactMatches.length > 0 ? exactMatches : partialMatches;
-
-      // Convert RouteData to SearchResult format
-      const searchResults: SearchResult[] = matchingRoutes.map((route) => ({
-        route: route.route,
-        pickup: route.pickup,
-        landmark: route.landmark,
-        walkingTime: route.walkingTime,
-        coordinates: route.coordinates,
-        price: route.price,
-      }));
-
-      // If still no matches, show popular routes as suggestions
-      const finalResults =
-        searchResults.length > 0
-          ? searchResults
-          : routeData
-              .filter((route) => route.isPopular)
-              .slice(0, 3)
-              .map((route) => ({
-                route: route.route,
-                pickup: route.pickup,
-                landmark: route.landmark,
-                walkingTime: route.walkingTime,
-                coordinates: route.coordinates,
-                price: route.price,
-              }));
-
-      console.log("Search results:", finalResults); // Debug log
+      const finalResults = [searchResult];
       setResults(finalResults);
       onSearchResults(finalResults);
+
+      toast({
+        title: "Route Found!",
+        description: `Route from ${apiResponse.origin.name} to ${apiResponse.destination.name} - ${apiResponse.fare.total_fare} ETB`,
+      });
+
+    } catch (error) {
+      console.error('Search failed:', error);
+      setError(error instanceof Error ? error.message : 'Failed to find route');
+      
+      toast({
+        title: "Search Failed",
+        description: error instanceof Error ? error.message : 'Failed to find route',
+        variant: "destructive",
+      });
+    } finally {
       setIsSearching(false);
-    }, 1000);
+    }
   };
 
   return (
@@ -201,17 +167,24 @@ export default function SearchSection({ onSearchResults }: SearchSectionProps) {
             variant="hero"
             className="w-full h-12 text-lg font-semibold"
           >
-            {isSearching ? "Searching..." : "Find Pickup Point"}
+            {isSearching ? "Searching..." : "Find Route"}
           </Button>
+
+          {/* Error Display */}
+          {error && (
+            <div className="flex items-center space-x-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+              <AlertCircle className="w-4 h-4 text-destructive" />
+              <p className="text-sm text-destructive">{error}</p>
+            </div>
+          )}
 
           {/* Available Locations Help */}
           <div className="text-center space-y-2">
             <p className="text-sm text-muted-foreground mb-2">
-              Available locations: Ledata, Lafto, Bole, Mexico, Piassa, Merkato
+              Available locations: Bole, Ayertena, Mexico, Merkato, Kazanchis, Megenagna, and more!
             </p>
             <p className="text-xs text-muted-foreground">
-              Try searching for routes like "Ledata to Mexico" or "Lafto to
-              Piassa"
+              Try searching for routes like "bole to ayertena" or "mexico to merkato"
             </p>
             <div className="flex items-center justify-center space-x-2 text-xs text-muted-foreground">
               <Mic className="w-3 h-3" />
