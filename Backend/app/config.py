@@ -18,13 +18,13 @@ class Settings(BaseSettings):
     # CORS Configuration
     ALLOWED_ORIGINS: list = ["*"]  # In production, specify your frontend URL
     
-    # Database Configuration - Using SQLite for development
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./fermata_taxi.db")
+    # # Database Configuration - Using SQLite for development
+    # DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./fermata_taxi.db")
     
-    # JWT Configuration
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "qTQnmdyZ93hHghNx1M0xvuFP5Qsw1c3o")
-    ALGORITHM: str = os.getenv("ALGORITHM", "HS256")
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30))
+    # # JWT Configuration
+    # SECRET_KEY: str = os.getenv("SECRET_KEY", "qTQnmdyZ93hHghNx1M0xvuFP5Qsw1c3o")
+    # ALGORITHM: str = os.getenv("ALGORITHM", "HS256")
+    # ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30))
     
     class Config:
         env_file = ".env"
