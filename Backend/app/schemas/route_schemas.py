@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Tuple, Optional, Dict, Any
+from typing import List, Tuple, Optional, Dict, Any, Union
 
 class Location(BaseModel):
     """Location model with coordinates and name"""
@@ -7,11 +7,34 @@ class Location(BaseModel):
     lng: float = Field(..., description="Longitude coordinate")
     name: str = Field(..., description="Location name")
 
+class LocationResponse(BaseModel):
+    """Response model for location data"""
+    name: str = Field(..., description="Location name")
+    lat: float = Field(..., description="Latitude")
+    lng: float = Field(..., description="Longitude")
+
+class LocationInput(BaseModel):
+    """Flexible location input - can be coordinates or place name"""
+    coordinates: Optional[Tuple[float, float]] = Field(None, description="Coordinates (lat, lng)")
+    place_name: Optional[str] = Field(None, description="Place name (e.g., 'Mexico', 'Ayertena')")
+    
+    def __init__(self, **data):
+        super().__init__(**data)
+        if not self.coordinates and not self.place_name:
+            raise ValueError("Either coordinates or place_name must be provided")
+
 class RouteRequest(BaseModel):
     """Request model for route calculation"""
     origin: Tuple[float, float] = Field(..., description="Origin coordinates (lat, lng)")
     destination: Tuple[float, float] = Field(..., description="Destination coordinates (lat, lng)")
     waypoints: Optional[List[Tuple[float, float]]] = Field(None, description="Optional waypoints")
+    include_instructions: bool = Field(False, description="Include turn-by-turn instructions")
+
+class UserFriendlyRouteRequest(BaseModel):
+    """User-friendly route request using place names"""
+    origin: str = Field(..., description="Origin place name (e.g., 'Mexico', 'Bole Airport')")
+    destination: str = Field(..., description="Destination place name (e.g., 'Ayertena', 'Merkato')")
+    waypoints: Optional[List[str]] = Field(None, description="Optional waypoint place names")
     include_instructions: bool = Field(False, description="Include turn-by-turn instructions")
 
 class RouteResponse(BaseModel):
@@ -22,6 +45,8 @@ class RouteResponse(BaseModel):
     coordinates: List[List[float]] = Field(..., description="Route coordinates")
     message: str = Field(..., description="Response message")
     instructions: Optional[List[str]] = Field(None, description="Turn-by-turn instructions")
+    origin_location: Optional[LocationResponse] = Field(None, description="Resolved origin location")
+    destination_location: Optional[LocationResponse] = Field(None, description="Resolved destination location")
 
 class PopularRoute(BaseModel):
     """Model for predefined popular routes"""
@@ -33,11 +58,11 @@ class PopularRoute(BaseModel):
     estimated_time: int = Field(..., description="Estimated time in minutes")
     estimated_distance: float = Field(..., description="Estimated distance in km")
 
-class LocationResponse(BaseModel):
-    """Response model for location data"""
-    name: str = Field(..., description="Location name")
-    lat: float = Field(..., description="Latitude")
-    lng: float = Field(..., description="Longitude")
+class LocationSearchResponse(BaseModel):
+    """Response model for location search"""
+    success: bool = Field(..., description="Whether the search was successful")
+    locations: List[LocationResponse] = Field(..., description="Found locations")
+    message: str = Field(..., description="Search message")
 
 class ErrorResponse(BaseModel):
     """Error response model"""

@@ -74,10 +74,21 @@ async def api_info():
         "endpoints": {
             "health": "/api/health",
             "popular_routes": "/api/routes/popular",
-            "calculate_route": "/api/route/directions",
+            "calculate_route": "/api/route/calculate",  # User-friendly endpoint
+            "plan_route": "/api/route/plan",  # Complete planning with place names
+            "search_locations": "/api/locations/search",  # Search locations by name
+            "resolve_location": "/api/locations/resolve/{place_name}",  # Resolve place name to coordinates
+            "route_directions": "/api/route/directions",  # Advanced coordinate-based endpoint
             "locations": "/api/locations",
             "taxis": "/api/taxis",
-            "trips": "/api/trips"
+            "trips": "/api/trips",
+            "pricing": "/api/pricing/calculate"
+        },
+        "user_friendly_features": {
+            "place_name_input": "Users can enter place names like 'Mexico', 'Ayertena' instead of coordinates",
+            "location_search": "Search for available locations by name",
+            "fuzzy_matching": "System can handle typos and partial matches",
+            "comprehensive_planning": "Get route, pricing, and nearby taxis in one request"
         }
     }
 

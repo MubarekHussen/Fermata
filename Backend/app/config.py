@@ -18,8 +18,8 @@ class Settings(BaseSettings):
     # CORS Configuration
     ALLOWED_ORIGINS: list = ["*"]  # In production, specify your frontend URL
     
-    # Database Configuration
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql+psycopg2://postgres:Muba%40sql14@localhost:5432/fermata_taxi")
+    # Database Configuration - Using SQLite for development
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./fermata_taxi.db")
     
     # JWT Configuration
     SECRET_KEY: str = os.getenv("SECRET_KEY", "qTQnmdyZ93hHghNx1M0xvuFP5Qsw1c3o")

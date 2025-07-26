@@ -22,13 +22,23 @@ metadata = MetaData()
 engine = create_engine(settings.DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Async engine for FastAPI
-async_engine = create_async_engine(
-    settings.DATABASE_URL.replace("postgresql+psycopg2://", "postgresql+asyncpg://"),
-    echo=settings.DEBUG,
-    pool_pre_ping=True,
-    pool_recycle=300,
-)
+# Async engine for FastAPI - Handle both PostgreSQL and SQLite
+if settings.DATABASE_URL.startswith("sqlite"):
+    # SQLite configuration
+    async_engine = create_async_engine(
+        settings.DATABASE_URL,
+        echo=settings.DEBUG,
+        connect_args={"check_same_thread": False}
+    )
+else:
+    # PostgreSQL configuration
+    postgres_url = settings.DATABASE_URL.replace("postgresql+psycopg2://", "postgresql+asyncpg://")
+    async_engine = create_async_engine(
+        postgres_url,
+        echo=settings.DEBUG,
+        pool_pre_ping=True,
+        pool_recycle=300,
+    )
 
 # Create async session factory
 AsyncSessionLocal = async_sessionmaker(
